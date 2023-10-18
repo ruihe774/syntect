@@ -58,7 +58,7 @@ fn main() {
         }
         (Some(ref s), Some(ref theme_dir), Some(ref packpath), ..) if s == "themepack" => {
             let ts = ThemeSet::load_from_folder(theme_dir).unwrap();
-            dump_to_file(&ts, packpath).unwrap();
+            dump_to_uncompressed_file(&ts, packpath).unwrap();
         }
         _ => usage_and_exit(),
     }

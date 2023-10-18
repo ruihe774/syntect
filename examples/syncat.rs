@@ -1,4 +1,5 @@
 use getopts::Options;
+use syntect::dumps::{from_uncompressed_dump_file, dump_to_uncompressed_file};
 use std::borrow::Cow;
 use std::io::BufRead;
 use std::path::Path;
@@ -6,7 +7,6 @@ use syntect::parsing::SyntaxSet;
 use syntect::highlighting::{Theme, ThemeSet, Style};
 use syntect::util::as_24_bit_terminal_escaped;
 use syntect::easy::HighlightFile;
-use syntect::dumps::{from_dump_file, dump_to_file};
 
 fn load_theme(tm_file: &str, enable_caching: bool) -> Theme {
     let tm_path = Path::new(tm_file);
@@ -15,10 +15,10 @@ fn load_theme(tm_file: &str, enable_caching: bool) -> Theme {
         let tm_cache = tm_path.with_extension("tmdump");
 
         if tm_cache.exists() {
-            from_dump_file(tm_cache).unwrap()
+            from_uncompressed_dump_file(tm_cache).unwrap()
         } else {
             let theme = ThemeSet::get_theme(tm_path).unwrap();
-            dump_to_file(&theme, tm_cache).unwrap();
+            dump_to_uncompressed_file(&theme, tm_cache).unwrap();
             theme
         }
     } else {

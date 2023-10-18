@@ -19,7 +19,7 @@ use bincode::deserialize_from;
 use bincode::serialize_into;
 use std::fs::File;
 #[cfg(feature = "dump-load")]
-use std::io::{BufRead};
+use std::io::BufRead;
 #[cfg(feature = "dump-create")]
 use std::io::{BufWriter, Write};
 #[cfg(all(feature = "default-syntaxes"))]
@@ -28,65 +28,22 @@ use crate::parsing::SyntaxSet;
 use crate::highlighting::ThemeSet;
 use std::path::Path;
 #[cfg(feature = "dump-create")]
-use flate2::write::ZlibEncoder;
-#[cfg(feature = "dump-load")]
-use flate2::bufread::ZlibDecoder;
-#[cfg(feature = "dump-create")]
-use flate2::Compression;
-#[cfg(feature = "dump-create")]
 use serde::Serialize;
 #[cfg(feature = "dump-load")]
 use serde::de::DeserializeOwned;
 
-/// Dumps an object to the given writer in a compressed binary format
-///
-/// The writer is encoded with the `bincode` crate and compressed with `flate2`.
+/// Dumps an object to a binary array, uncompressed
 #[cfg(feature = "dump-create")]
-pub fn dump_to_writer<T: Serialize, W: Write>(to_dump: &T, output: W) -> Result<()> {
-    serialize_to_writer_impl(to_dump, output, true)
-}
-
-/// Dumps an object to a binary array in the same format as [`dump_to_writer`]
-///
-/// [`dump_to_writer`]: fn.dump_to_writer.html
-#[cfg(feature = "dump-create")]
-pub fn dump_binary<T: Serialize>(o: &T) -> Vec<u8> {
+pub fn dump_to_uncompressed_binary<T: Serialize>(o: &T) -> Vec<u8> {
     let mut v = Vec::new();
-    dump_to_writer(o, &mut v).unwrap();
+    serialize_to_writer_impl(o, &mut v).unwrap();
     v
 }
 
-/// Dumps an encodable object to a file at a given path, in the same format as [`dump_to_writer`]
-///
-/// If a file already exists at that path it will be overwritten. The files created are encoded with
-/// the `bincode` crate and then compressed with the `flate2` crate.
-///
-/// [`dump_to_writer`]: fn.dump_to_writer.html
-#[cfg(feature = "dump-create")]
-pub fn dump_to_file<T: Serialize, P: AsRef<Path>>(o: &T, path: P) -> Result<()> {
-    let out = BufWriter::new(File::create(path)?);
-    dump_to_writer(o, out)
-}
-
-/// A helper function for decoding and decompressing data from a reader
+/// Loads an object from a binary array, uncompressed
 #[cfg(feature = "dump-load")]
-pub fn from_reader<T: DeserializeOwned, R: BufRead>(input: R) -> Result<T> {
-    deserialize_from_reader_impl(input, true)
-}
-
-/// Returns a fully loaded object from a binary dump.
-///
-/// This function panics if the dump is invalid.
-#[cfg(feature = "dump-load")]
-pub fn from_binary<T: DeserializeOwned>(v: &[u8]) -> T {
-    from_reader(v).unwrap()
-}
-
-/// Returns a fully loaded object from a binary dump file.
-#[cfg(feature = "dump-load")]
-pub fn from_dump_file<T: DeserializeOwned, P: AsRef<Path>>(path: P) -> Result<T> {
-    let contents = std::fs::read(path)?;
-    from_reader(&contents[..])
+pub fn from_uncompressed_binary<T: DeserializeOwned>(v: &[u8])  -> T {
+    from_uncompressed_data(v).unwrap()
 }
 
 /// To be used when serializing a [`SyntaxSet`] to a file. A [`SyntaxSet`]
@@ -96,7 +53,7 @@ pub fn from_dump_file<T: DeserializeOwned, P: AsRef<Path>>(path: P) -> Result<T>
 #[cfg(feature = "dump-create")]
 pub fn dump_to_uncompressed_file<T: Serialize, P: AsRef<Path>>(o: &T, path: P) -> Result<()> {
     let out = BufWriter::new(File::create(path)?);
-    serialize_to_writer_impl(o, out, false)
+    serialize_to_writer_impl(o, out)
 }
 
 /// To be used when deserializing a [`SyntaxSet`] that was previously written to
@@ -104,7 +61,7 @@ pub fn dump_to_uncompressed_file<T: Serialize, P: AsRef<Path>>(o: &T, path: P) -
 #[cfg(feature = "dump-load")]
 pub fn from_uncompressed_dump_file<T: DeserializeOwned, P: AsRef<Path>>(path: P) -> Result<T> {
     let contents = std::fs::read(path)?;
-    deserialize_from_reader_impl(&contents[..], false)
+    deserialize_from_reader_impl(&contents[..])
 }
 
 /// To be used when deserializing a [`SyntaxSet`] from raw data, for example
@@ -112,29 +69,19 @@ pub fn from_uncompressed_dump_file<T: DeserializeOwned, P: AsRef<Path>>(path: P)
 /// macro.
 #[cfg(feature = "dump-load")]
 pub fn from_uncompressed_data<T: DeserializeOwned>(v: &[u8]) -> Result<T> {
-    deserialize_from_reader_impl(v, false)
+    deserialize_from_reader_impl(v)
 }
 
 /// Private low level helper function used to implement the public API.
 #[cfg(feature = "dump-create")]
-fn serialize_to_writer_impl<T: Serialize, W: Write>(to_dump: &T, output: W, use_compression: bool) -> Result<()> {
-    if use_compression {
-        let mut encoder = ZlibEncoder::new(output, Compression::best());
-        serialize_into(&mut encoder, to_dump)
-    } else {
-        serialize_into(output, to_dump)
-    }
+fn serialize_to_writer_impl<T: Serialize, W: Write>(to_dump: &T, output: W) -> Result<()> {
+    serialize_into(output, to_dump)
 }
 
 /// Private low level helper function used to implement the public API.
 #[cfg(feature = "dump-load")]
-fn deserialize_from_reader_impl<T: DeserializeOwned, R: BufRead>(input: R, use_compression: bool) -> Result<T> {
-    if use_compression {
-        let mut decoder = ZlibDecoder::new(input);
-        deserialize_from(&mut decoder)
-    } else {
-        deserialize_from(input)
-    }
+fn deserialize_from_reader_impl<T: DeserializeOwned, R: BufRead>(input: R) -> Result<T> {
+    deserialize_from(input)
 }
 
 #[cfg(feature = "default-syntaxes")]
@@ -204,7 +151,7 @@ impl ThemeSet {
     /// - `InspiredGitHub` from [here](https://github.com/sethlopezme/InspiredGitHub.tmtheme)
     /// - `Solarized (dark)` and `Solarized (light)`
     pub fn load_defaults() -> ThemeSet {
-        from_binary(include_bytes!("../assets/default.themedump"))
+        from_uncompressed_binary(include_bytes!("../assets/default.themedump"))
     }
 }
 
@@ -219,9 +166,9 @@ mod tests {
         builder.add_from_folder("testdata/Packages", false).unwrap();
         let ss = builder.build();
 
-        let bin = dump_binary(&ss);
+        let bin = dump_to_uncompressed_binary(&ss);
         println!("{:?}", bin.len());
-        let ss2: SyntaxSet = from_binary(&bin[..]);
+        let ss2: SyntaxSet = from_uncompressed_binary(&bin[..]);
         assert_eq!(ss.syntaxes().len(), ss2.syntaxes().len());
     }
 
@@ -234,12 +181,12 @@ mod tests {
         let mut builder1 = SyntaxSetBuilder::new();
         builder1.add_from_folder("testdata/Packages", false).unwrap();
         let ss1 = builder1.build();
-        let bin1 = dump_binary(&ss1);
+        let bin1 = dump_to_uncompressed_binary(&ss1);
 
         let mut builder2 = SyntaxSetBuilder::new();
         builder2.add_from_folder("testdata/Packages", false).unwrap();
         let ss2 = builder2.build();
-        let bin2 = dump_binary(&ss2);
+        let bin2 = dump_to_uncompressed_binary(&ss2);
         // This is redundant, but assert_eq! can be really slow on a large
         // vector, so check the length first to fail faster.
         assert_eq!(bin1.len(), bin2.len());

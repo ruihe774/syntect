@@ -435,7 +435,7 @@ impl SyntaxReference {
 
 impl LazyContexts {
     fn deserialize(data: &[u8]) -> LazyContexts {
-        crate::dumps::from_reader(data).expect("data is not corrupt or out of sync with the code")
+        crate::dumps::from_uncompressed_data(data).expect("data is not corrupt or out of sync with the code")
     }
 }
 
@@ -606,13 +606,13 @@ impl SyntaxSetBuilder {
                     }
                 }
                 Self::link_context(context, syntax_index, &all_context_ids, &syntaxes);
-                
+
                 if context.uses_backrefs {
                     found_more_backref_includes = true;
                 }
             }
         }
-        
+
         // We need to recursively mark contexts that include contexts which
         // use backreferences as using backreferences. In theory we could use
         // a more efficient method here like doing a toposort or constructing
@@ -655,7 +655,7 @@ impl SyntaxSetBuilder {
                 contexts: all_contexts.remove(0),
             };
 
-            syntax.serialized_lazy_contexts = crate::dumps::dump_binary(&lazy_contexts);
+            syntax.serialized_lazy_contexts = crate::dumps::dump_to_uncompressed_binary(&lazy_contexts);
         };
 
         SyntaxSet {
