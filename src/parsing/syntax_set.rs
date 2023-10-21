@@ -59,6 +59,7 @@ pub struct SyntaxReference {
     pub variables: HashMap<String, String>,
     #[serde(skip)]
     pub(crate) lazy_contexts: OnceCell<LazyContexts>,
+    #[serde(with = "serde_bytes")]
     pub(crate) serialized_lazy_contexts: Vec<u8>,
 }
 
