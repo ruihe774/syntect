@@ -192,6 +192,8 @@ mod regex_impl {
 mod regex_impl {
     use std::error::Error;
 
+    use smallvec::SmallVec;
+
     #[derive(Debug)]
     pub struct Regex {
         regex: fancy_regex::Regex,
@@ -199,12 +201,12 @@ mod regex_impl {
 
     #[derive(Clone, Debug, Eq, PartialEq)]
     pub struct Region {
-        positions: Vec<Option<(usize, usize)>>,
+        positions: SmallVec<[Option<(usize, usize)>; 8]>,
     }
 
     pub fn new_region() -> Region {
         Region {
-            positions: Vec::with_capacity(8),
+            positions: SmallVec::new(),
         }
     }
 

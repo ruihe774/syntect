@@ -13,6 +13,7 @@
 use super::syntax_definition::*;
 use super::scope::*;
 use super::regex::Region;
+use std::mem;
 use std::usize;
 use std::collections::HashMap;
 use std::i32;
@@ -63,6 +64,7 @@ pub struct ParseState {
     // See issue #101. Contains indices of frames pushed by `with_prototype`s.
     // Doesn't look at `with_prototype`s below top of stack.
     proto_starts: Vec<usize>,
+    search_cache: SearchCache,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -189,6 +191,7 @@ impl ParseState {
             stack: vec![start_state],
             first_line: true,
             proto_starts: Vec::new(),
+            search_cache: SearchCache::with_capacity_and_hasher(128,  BuildHasherDefault::<FnvHasher>::default()),
         }
     }
 
@@ -232,12 +235,13 @@ impl ParseState {
         }
 
         let mut regions = Region::new();
-        let fnv = BuildHasherDefault::<FnvHasher>::default();
-        let mut search_cache: SearchCache = HashMap::with_capacity_and_hasher(128, fnv);
+        let mut search_cache = mem::take(&mut self.search_cache);
+        search_cache.clear();
         // Used for detecting loops with push/pop, see long comment above.
         let mut non_consuming_push_at = (0, 0);
 
-        while self.parse_next_token(
+        let r = loop {
+          match self.parse_next_token(
             line,
             syntax_set,
             &mut match_start,
@@ -245,8 +249,16 @@ impl ParseState {
             &mut regions,
             &mut non_consuming_push_at,
             &mut res
-        )? {}
+          ) {
+            r @ Ok(false) => break r,
+            r @ Err(_) => break r,
+            Ok(true) => (),
+          }
+        };
 
+        mem::swap(&mut self.search_cache, &mut search_cache);
+
+        r?;
         Ok(res)
     }
 
@@ -1753,7 +1765,7 @@ contexts:
 
         expect_scope_stacks_with_syntax("aa", &["<a>", "<b>"], syntax);
     }
-    
+
     #[test]
     fn can_include_nested_backrefs() {
         let syntax = SyntaxDefinition::load_from_str(r#"
