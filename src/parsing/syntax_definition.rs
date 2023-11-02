@@ -10,6 +10,7 @@ use super::{scope::*, ParsingError};
 use super::regex::{Regex, Region};
 use regex_syntax::escape;
 use serde::{Deserialize, Serialize, Serializer};
+use smallvec::{SmallVec, smallvec};
 use crate::parsing::syntax_set::SyntaxSet;
 
 pub type CaptureMapping = Vec<(usize, Vec<Scope>)>;
@@ -88,8 +89,8 @@ pub enum Pattern {
 #[derive(Debug)]
 pub struct MatchIter<'a> {
     syntax_set: &'a SyntaxSet,
-    ctx_stack: Vec<&'a Context>,
-    index_stack: Vec<usize>,
+    ctx_stack: SmallVec<[&'a Context; 8]>,
+    index_stack: SmallVec<[usize; 8]>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -186,8 +187,8 @@ impl<'a> Iterator for MatchIter<'a> {
 pub fn context_iter<'a>(syntax_set: &'a SyntaxSet, context: &'a Context) -> MatchIter<'a> {
     MatchIter {
         syntax_set,
-        ctx_stack: vec![context],
-        index_stack: vec![0],
+        ctx_stack: smallvec![context],
+        index_stack: smallvec![0],
     }
 }
 

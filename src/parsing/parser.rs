@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::i32;
 use std::hash::BuildHasherDefault;
 use fnv::FnvHasher;
+use smallvec::SmallVec;
 use crate::parsing::syntax_set::{SyntaxSet, SyntaxReference};
 use crate::parsing::syntax_definition::ContextId;
 
@@ -70,7 +71,7 @@ pub struct ParseState {
 #[derive(Debug, Clone, Eq, PartialEq)]
 struct StateLevel {
     context: ContextId,
-    prototypes: Vec<ContextId>,
+    prototypes: SmallVec<[ContextId; 2]>,
     captures: Option<(Region, String)>,
 }
 
@@ -184,7 +185,7 @@ impl ParseState {
     pub fn new(syntax: &SyntaxReference) -> ParseState {
         let start_state = StateLevel {
             context: syntax.context_ids()["__start"],
-            prototypes: Vec::new(),
+            prototypes: SmallVec::new(),
             captures: None,
         };
         ParseState {
@@ -506,7 +507,7 @@ impl ParseState {
             // captures could appear in an arbitrary order, have to produce ops in right order
             // ex: ((bob)|(hi))* could match hibob in wrong order, and outer has to push first
             // we don't have to handle a capture matching multiple times, Sublime doesn't
-            let mut map: Vec<((usize, i32), ScopeStackOp)> = Vec::new();
+            let mut map: SmallVec<[((usize, i32), ScopeStackOp); 8]> = SmallVec::new();
             for &(cap_index, ref scopes) in capture_map.iter() {
                 if let Some((cap_start, cap_end)) = reg_match.regions.pos(cap_index) {
                     // marking up empty captures causes pops to be sorted wrong
@@ -514,17 +515,15 @@ impl ParseState {
                         continue;
                     }
                     // println!("capture {:?} at {:?}-{:?}", scopes[0], cap_start, cap_end);
-                    for scope in scopes.iter() {
-                        map.push(((cap_start, -((cap_end - cap_start) as i32)),
-                                  ScopeStackOp::Push(*scope)));
-                    }
+                    map.extend(scopes.iter().map(|scope| (
+                      (cap_start, -((cap_end - cap_start) as i32)),
+                      ScopeStackOp::Push(*scope)
+                    )));
                     map.push(((cap_end, i32::MIN), ScopeStackOp::Pop(scopes.len())));
                 }
             }
             map.sort_by(|a, b| a.0.cmp(&b.0));
-            for ((index, _), op) in map.into_iter() {
-                ops.push((index, op));
-            }
+            ops.extend(map.into_iter().map(|((index, _), op)| (index, op)));
         }
         if !pat.scope.is_empty() {
             // println!("popping at {}", match_end);
@@ -667,9 +666,9 @@ impl ParseState {
             let mut proto_ids = if i == 0 {
                 // it is only necessary to preserve the old prototypes
                 // at the first stack frame pushed
-                old_proto_ids.clone().unwrap_or_else(Vec::new)
+                old_proto_ids.clone().unwrap_or_else(SmallVec::new)
             } else {
-                Vec::new()
+                SmallVec::new()
             };
             if i == ctx_refs.len() - 1 {
                 // if a with_prototype was specified, and multiple contexts were pushed,
