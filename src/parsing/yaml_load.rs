@@ -149,7 +149,7 @@ impl SyntaxDefinition {
             // TODO maybe cache a compiled version of this Regex
             first_line_match: get_key(h, "first_line_match", |x| x.as_str())
                 .ok()
-                .map(|s| s.to_owned()),
+                .map(|s| Regex::new(s.to_owned())),
             hidden: get_key(h, "hidden", |x| x.as_bool()).unwrap_or(false),
 
             variables: state.variables,
@@ -429,10 +429,9 @@ impl SyntaxDefinition {
 
     fn try_compile_regex(regex_str: &str) -> Result<(), ParseSyntaxError> {
         // Replace backreferences with a placeholder value that will also appear in errors
-        let regex_str = substitute_backrefs_in_regex(regex_str, |i| Some(format!("<placeholder_{}>", i)));
 
-        if let Some(error) = Regex::try_compile(&regex_str) {
-            Err(ParseSyntaxError::RegexCompileError(regex_str, error))
+        if let Some(error) = Regex::try_compile(regex_str) {
+            Err(ParseSyntaxError::RegexCompileError(regex_str.to_owned(), error))
         } else {
             Ok(())
         }

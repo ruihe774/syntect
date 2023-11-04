@@ -34,7 +34,7 @@ pub struct SyntaxSet {
     /// Stores the syntax index for every path that was loaded
     path_syntaxes: Vec<(String, usize)>,
 
-    #[serde(skip_serializing, skip_deserializing, default = "OnceCell::new")]
+    #[serde(skip)]
     first_line_cache: OnceCell<FirstLineCache>,
     /// Metadata, e.g. indent and commenting information.
     ///
@@ -53,7 +53,7 @@ pub struct SyntaxReference {
     pub name: String,
     pub file_extensions: Vec<String>,
     pub scope: Scope,
-    pub first_line_match: Option<String>,
+    pub first_line_match: Option<Regex>,
     pub hidden: bool,
     #[serde(serialize_with = "ordered_map")]
     pub variables: HashMap<String, String>,
@@ -849,9 +849,8 @@ impl FirstLineCache {
     fn new(syntaxes: &[SyntaxReference]) -> FirstLineCache {
         let mut regexes = Vec::new();
         for (i, syntax) in syntaxes.iter().enumerate() {
-            if let Some(ref reg_str) = syntax.first_line_match {
-                let reg = Regex::new(reg_str.into());
-                regexes.push((reg, i));
+            if let Some(ref regex) = syntax.first_line_match {
+                regexes.push((regex.clone(), i));
             }
         }
         FirstLineCache {

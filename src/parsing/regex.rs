@@ -1,16 +1,29 @@
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer, Deserializer};
+use serde_bytes::{Bytes, ByteBuf};
 use std::error::Error;
+use std::sync::Arc;
+
+use crate::dumps::dump_to_uncompressed_binary;
 
 /// An abstraction for regex patterns.
 ///
 /// * Allows swapping out the regex implementation because it's only in this module.
 /// * Makes regexes serializable and deserializable using just the pattern string.
 /// * Lazily compiles regexes on first use to improve initialization time.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Regex {
-    regex_str: String,
+    source: Arc<RegexSource>,
+    #[serde(skip)]
     regex: OnceCell<regex_impl::Regex>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RegexSource {
+    Pattern(String),
+    Binary(Vec<u8>),
+    ExprTree(fancy_regex::ExprTree),
 }
 
 /// A region contains text positions for capture groups in a match result.
@@ -24,21 +37,41 @@ impl Regex {
     ///
     /// Note that the regex compilation happens on first use, which is why this method does not
     /// return a result.
-    pub fn new(regex_str: String) -> Self {
+    pub fn new(pattern: String) -> Self {
         Self {
-            regex_str,
+            source: Arc::new(RegexSource::Pattern(pattern)),
+            regex: OnceCell::new(),
+        }
+    }
+
+    /// Deserialize a new regex from the bytes.
+    pub fn deserialize(binary: Vec<u8>) -> Self {
+        Self {
+            source: Arc::new(RegexSource::Binary(binary)),
+            regex: OnceCell::new(),
+        }
+    }
+
+    /// Create a new regex from the expr tree.
+    pub fn from_expr_tree(tree: fancy_regex::ExprTree) -> Self {
+        Self {
+            source: Arc::new(RegexSource::ExprTree(tree)),
             regex: OnceCell::new(),
         }
     }
 
     /// Check whether the pattern compiles as a valid regex or not.
     pub fn try_compile(regex_str: &str) -> Option<Box<dyn Error + Send + Sync + 'static>> {
-        regex_impl::Regex::new(regex_str).err()
+        regex_impl::Regex::parse_expr_tree(regex_str).err()
     }
 
-    /// Return the regex pattern.
-    pub fn regex_str(&self) -> &str {
-        &self.regex_str
+    /// Get expr tree
+    pub fn expr_tree(&self) -> Result<fancy_regex::ExprTree, Box<dyn Error + Send + Sync + 'static>> {
+        match self.source.as_ref() {
+            RegexSource::Pattern(pattern) => regex_impl::Regex::parse_expr_tree(pattern),
+            RegexSource::Binary(binary) => regex_impl::Regex::deserialize_expr_tree(binary),
+            RegexSource::ExprTree(tree) => Ok(tree.clone())
+        }
     }
 
     /// Check if the regex matches the given text.
@@ -66,7 +99,7 @@ impl Regex {
 
     fn regex(&self) -> &regex_impl::Regex {
         self.regex.get_or_init(|| {
-            regex_impl::Regex::new(&self.regex_str).expect("regex string should be pre-tested")
+            regex_impl::Regex::from_expr_tree(self.expr_tree().expect("regex string should be pre-tested"))
         })
     }
 }
@@ -74,7 +107,7 @@ impl Regex {
 impl Clone for Regex {
     fn clone(&self) -> Self {
         Regex {
-            regex_str: self.regex_str.clone(),
+            source: self.source.clone(),
             regex: OnceCell::new(),
         }
     }
@@ -82,28 +115,32 @@ impl Clone for Regex {
 
 impl PartialEq for Regex {
     fn eq(&self, other: &Regex) -> bool {
-        self.regex_str == other.regex_str
+        self.source == other.source
     }
 }
 
 impl Eq for Regex {}
 
-impl Serialize for Regex {
+
+impl Serialize for RegexSource {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
-        serializer.serialize_str(&self.regex_str)
+        match self {
+            RegexSource::Binary(binary) => Bytes::new(binary.as_slice()).serialize(serializer),
+            RegexSource::ExprTree(tree) => ByteBuf::from(dump_to_uncompressed_binary(tree)).serialize(serializer),
+            RegexSource::Pattern(pattern) => ByteBuf::from(dump_to_uncompressed_binary(&regex_impl::Regex::parse_expr_tree(pattern).map_err(|_| serde::ser::Error::custom("invalid regex"))?)).serialize(serializer)
+        }
     }
 }
 
-impl<'de> Deserialize<'de> for Regex {
+impl<'de> Deserialize<'de> for RegexSource {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        let regex_str = String::deserialize(deserializer)?;
-        Ok(Regex::new(regex_str))
+        Ok(RegexSource::Binary(ByteBuf::deserialize(deserializer)?.into_vec()))
     }
 }
 
@@ -194,6 +231,8 @@ mod regex_impl {
 
     use smallvec::SmallVec;
 
+    use crate::dumps::from_uncompressed_data;
+
     #[derive(Debug)]
     pub struct Regex {
         regex: fancy_regex::Regex,
@@ -211,12 +250,17 @@ mod regex_impl {
     }
 
     impl Regex {
-        pub fn new(regex_str: &str) -> Result<Regex, Box<dyn Error + Send + Sync + 'static>> {
-            let result = fancy_regex::Regex::new(regex_str);
-            match result {
-                Ok(regex) => Ok(Regex { regex }),
-                Err(error) => Err(Box::new(error)),
-            }
+        pub fn parse_expr_tree(pattern: &str) -> Result<fancy_regex::ExprTree, Box<dyn Error + Send + Sync + 'static>> {
+            Ok(fancy_regex::Expr::parse_tree(pattern)?)
+        }
+
+        pub fn deserialize_expr_tree(binary: &[u8]) -> Result<fancy_regex::ExprTree, Box<dyn Error + Send + Sync + 'static>> {
+            Ok(from_uncompressed_data(binary)?)
+        }
+
+        pub fn from_expr_tree(expr_tree: fancy_regex::ExprTree) -> Regex {
+            let regex = fancy_regex::RegexBuilder::new().build_from_expr_tree(expr_tree).unwrap();
+            Regex { regex }
         }
 
         pub fn is_match(&self, text: &str) -> bool {
@@ -275,13 +319,5 @@ mod tests {
         assert!(regex.regex.get().is_none());
         assert!(regex.is_match("test"));
         assert!(regex.regex.get().is_some());
-    }
-
-    #[test]
-    fn serde_as_string() {
-        let pattern: Regex = serde_json::from_str("\"just a string\"").unwrap();
-        assert_eq!(pattern.regex_str(), "just a string");
-        let back_to_str = serde_json::to_string(&pattern).unwrap();
-        assert_eq!(back_to_str, "\"just a string\"");
     }
 }

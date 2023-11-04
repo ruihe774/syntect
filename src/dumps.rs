@@ -13,10 +13,6 @@
 //! [`ThemeSet`]: ../highlighting/struct.ThemeSet.html
 //! [`dump_to_file`]: fn.dump_to_file.html
 use bincode::Result;
-#[cfg(feature = "dump-load")]
-use bincode::deserialize_from;
-#[cfg(feature = "dump-create")]
-use bincode::serialize_into;
 use std::fs::File;
 #[cfg(feature = "dump-load")]
 use std::io::BufRead;
@@ -75,13 +71,15 @@ pub fn from_uncompressed_data<T: DeserializeOwned>(v: &[u8]) -> Result<T> {
 /// Private low level helper function used to implement the public API.
 #[cfg(feature = "dump-create")]
 fn serialize_to_writer_impl<T: Serialize, W: Write>(to_dump: &T, output: W) -> Result<()> {
-    serialize_into(output, to_dump)
+    use bincode::{DefaultOptions, Options};
+    DefaultOptions::new().serialize_into(output, to_dump)
 }
 
 /// Private low level helper function used to implement the public API.
 #[cfg(feature = "dump-load")]
 fn deserialize_from_reader_impl<T: DeserializeOwned, R: BufRead>(input: R) -> Result<T> {
-    deserialize_from(input)
+    use bincode::{DefaultOptions, Options};
+    DefaultOptions::new().deserialize_from(input)
 }
 
 #[cfg(feature = "default-syntaxes")]
