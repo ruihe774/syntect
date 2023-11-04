@@ -58,7 +58,7 @@ impl Regex {
         end: usize,
         region: Option<&mut Region>,
     ) -> bool {
-        if let Ok(Some(captures)) = self.regex().captures_from_pos(&text[..end], begin) {
+        if let Ok(Some(captures)) = self.regex().captures_within_range(text, begin..end) {
             if let Some(region) = region {
                 region.init_from_captures(&captures);
             }
