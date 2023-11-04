@@ -280,7 +280,7 @@ impl MatchPattern {
 
     pub fn new(
         has_captures: bool,
-        regex_str: String,
+        regex_str: &str,
         scope: Vec<Scope>,
         captures: Option<CaptureMapping>,
         operation: MatchOperation,
@@ -288,7 +288,7 @@ impl MatchPattern {
     ) -> MatchPattern {
         MatchPattern {
             has_captures,
-            regex: Regex::new(regex_str),
+            regex: Regex::from_pattern(regex_str).unwrap(),
             scope,
             captures,
             operation,
@@ -299,7 +299,7 @@ impl MatchPattern {
     /// Used by the parser to compile a regex which needs to reference
     /// regions from another matched pattern.
     pub fn regex_with_refs(&self, region: &Region, text: &str) -> Regex {
-        let mut expr_tree = self.regex.expr_tree().unwrap();
+        let mut expr_tree = self.regex.get_expr_tree();
         substitute_backrefs_in_regex(&mut expr_tree.expr, &|i| {
             region.pos(i).map(|(start, end)| escape(&text[start..end]))
         });

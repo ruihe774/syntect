@@ -119,8 +119,8 @@ impl SyntaxDefinition {
         let mut state = ParserState {
             scope_repo,
             variables,
-            variable_regex: Regex::new(r"\{\{([A-Za-z0-9_]+)\}\}".into()),
-            backref_regex: Regex::new(r"\\\d".into()),
+            variable_regex: Regex::from_pattern(r"\{\{([A-Za-z0-9_]+)\}\}".into()).unwrap(),
+            backref_regex: Regex::from_pattern(r"\\\d".into()).unwrap(),
             lines_include_newline,
         };
 
@@ -149,7 +149,7 @@ impl SyntaxDefinition {
             // TODO maybe cache a compiled version of this Regex
             first_line_match: get_key(h, "first_line_match", |x| x.as_str())
                 .ok()
-                .map(|s| Regex::new(s.to_owned())),
+                .map(|s| Regex::from_pattern(s).unwrap()),
             hidden: get_key(h, "hidden", |x| x.as_bool()).unwrap_or(false),
 
             variables: state.variables,
@@ -360,7 +360,7 @@ impl SyntaxDefinition {
 
         let pattern = MatchPattern::new(
             has_captures,
-            regex_str,
+            regex_str.as_str(),
             scope,
             captures,
             operation,
@@ -430,8 +430,8 @@ impl SyntaxDefinition {
     fn try_compile_regex(regex_str: &str) -> Result<(), ParseSyntaxError> {
         // Replace backreferences with a placeholder value that will also appear in errors
 
-        if let Some(error) = Regex::try_compile(regex_str) {
-            Err(ParseSyntaxError::RegexCompileError(regex_str.to_owned(), error))
+        if let Err(error) = Regex::from_pattern(regex_str) {
+            Err(ParseSyntaxError::RegexCompileError(regex_str.to_owned(), Box::new(error)))
         } else {
             Ok(())
         }
