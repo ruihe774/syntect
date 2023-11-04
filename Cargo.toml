@@ -20,7 +20,7 @@ exclude = [
 [dependencies]
 yaml-rust = { version = "0.4.5", optional = true }
 onig = { version = "6.0", optional = true, default-features = false }
-fancy-regex = { version = "0.11", optional = true }
+fancy-regex = { git = "https://github.com/ruihe774/fancy-regex.git", branch = "msk", optional = true, features = ["serde"] }
 walkdir = "2.0"
 regex-syntax = { version = "0.8", optional = true }
 bitflags = "1.0.4"
@@ -67,7 +67,7 @@ yaml-load = ["yaml-rust", "parsing"]
 default-onig = ["parsing", "default-syntaxes", "default-themes", "html", "plist-load", "yaml-load", "dump-load", "dump-create", "regex-onig"]
 # In order to switch to the fancy-regex engine, disable default features then add the default-fancy feature
 default-fancy = ["parsing", "default-syntaxes", "default-themes", "html", "plist-load", "yaml-load", "dump-load", "dump-create", "regex-fancy"]
-default = ["default-onig"]
+default = ["default-fancy"]
 
 # [profile.release]
 # debug = true
