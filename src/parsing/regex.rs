@@ -1,5 +1,5 @@
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use smallvec::SmallVec;
 use std::sync::RwLock;
 
@@ -21,7 +21,7 @@ impl Regex {
     }
 
     /// Create a new regex from the expr tree.
-    pub fn from_expr_tree(tree: fancy_regex::ExprTree) ->Self {
+    pub fn from_expr_tree(tree: fancy_regex::ExprTree) -> Self {
         Regex {
             tree: RwLock::new(Some(tree)),
             regex: OnceCell::new(),
@@ -70,7 +70,9 @@ impl Regex {
 
     fn regex(&self) -> &fancy_regex::Regex {
         self.regex.get_or_init(|| {
-            fancy_regex::RegexBuilder::new().build_from_expr_tree(self.tree.write().unwrap().take().unwrap()).expect("regex string should be pre-tested")
+            fancy_regex::RegexBuilder::new()
+                .build_from_expr_tree(self.tree.write().unwrap().take().unwrap())
+                .expect("regex string should be pre-tested")
         })
     }
 }
@@ -96,9 +98,13 @@ impl Clone for Regex {
 impl PartialEq for Regex {
     fn eq(&self, other: &Regex) -> bool {
         let left_borrow = self.tree.read().unwrap();
-        let left_expr = left_borrow.as_ref().unwrap_or_else(|| self.regex.get().unwrap().as_expr_tree());
+        let left_expr = left_borrow
+            .as_ref()
+            .unwrap_or_else(|| self.regex.get().unwrap().as_expr_tree());
         let right_borrow = other.tree.read().unwrap();
-        let right_expr = right_borrow.as_ref().unwrap_or_else(|| other.regex.get().unwrap().as_expr_tree());
+        let right_expr = right_borrow
+            .as_ref()
+            .unwrap_or_else(|| other.regex.get().unwrap().as_expr_tree());
         left_expr == right_expr
     }
 }
@@ -111,7 +117,9 @@ impl Serialize for Regex {
         S: Serializer,
     {
         let borrow = self.tree.read().unwrap();
-        let expr = borrow.as_ref().unwrap_or_else(|| self.regex.get().unwrap().as_expr_tree());
+        let expr = borrow
+            .as_ref()
+            .unwrap_or_else(|| self.regex.get().unwrap().as_expr_tree());
         expr.serialize(serializer)
     }
 }
@@ -121,7 +129,9 @@ impl<'de> Deserialize<'de> for Regex {
     where
         D: Deserializer<'de>,
     {
-        Ok(Regex::from_expr_tree(Deserialize::deserialize(deserializer)?))
+        Ok(Regex::from_expr_tree(Deserialize::deserialize(
+            deserializer,
+        )?))
     }
 }
 
@@ -137,7 +147,8 @@ impl Region {
 
     fn init_from_captures(&mut self, captures: &fancy_regex::Captures) {
         self.positions.clear();
-        self.positions.extend((0..captures.len()).map(|i| captures.get(i).map(|m| (m.start(), m.end()))));
+        self.positions
+            .extend((0..captures.len()).map(|i| captures.get(i).map(|m| (m.start(), m.end()))));
     }
 
     pub fn pos(&self, i: usize) -> Option<(usize, usize)> {

@@ -4,15 +4,15 @@
 //! like text editors and I have no idea what kind of monkeying you might want to do with the data.
 //! Perhaps parsing your own syntax format into this data structure?
 
+use super::regex::{Regex, Region};
+use super::{scope::*, ParsingError};
+use crate::parsing::syntax_set::SyntaxSet;
+use regex_syntax::escape;
+use serde::{Deserialize, Serialize, Serializer};
+use smallvec::{smallvec, SmallVec};
 use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 use std::mem;
-use super::{scope::*, ParsingError};
-use super::regex::{Regex, Region};
-use regex_syntax::escape;
-use serde::{Deserialize, Serialize, Serializer};
-use smallvec::{SmallVec, smallvec};
-use crate::parsing::syntax_set::SyntaxSet;
 
 pub type CaptureMapping = Vec<(usize, Vec<Scope>)>;
 
@@ -132,7 +132,6 @@ pub enum ContextReference {
     Direct(ContextId),
 }
 
-
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum MatchOperation {
     Push(Vec<ContextReference>),
@@ -161,7 +160,7 @@ impl<'a> Iterator for MatchIter<'a> {
                 match context.patterns[index] {
                     Pattern::Match(_) => {
                         return Some((context, index));
-                    },
+                    }
                     Pattern::Include(ref ctx_ref) => {
                         let ctx_ptr = match *ctx_ref {
                             ContextReference::Direct(ref context_id) => {
@@ -216,22 +215,34 @@ impl ContextReference {
     pub fn id(&self) -> Result<ContextId, ParsingError> {
         match *self {
             ContextReference::Direct(ref context_id) => Ok(*context_id),
-             _ => Err(ParsingError::UnresolvedContextReference(self.clone())),
+            _ => Err(ParsingError::UnresolvedContextReference(self.clone())),
         }
     }
 }
 
 pub(crate) fn substitute_backrefs_in_regex<F>(expr: &mut fancy_regex::Expr, substituter: &F)
-    where F: Fn(usize) -> Option<String>
+where
+    F: Fn(usize) -> Option<String>,
 {
     use fancy_regex::Expr::*;
 
     let recur = |expr| substitute_backrefs_in_regex(expr, substituter);
 
     match expr {
-        Empty | Any{..} | StartText | EndText | StartLine | EndLine | Literal {..} | Delegate {..} | KeepOut | ContinueFromPreviousMatchEnd => (),
+        Empty
+        | Any { .. }
+        | StartText
+        | EndText
+        | StartLine
+        | EndLine
+        | Literal { .. }
+        | Delegate { .. }
+        | KeepOut
+        | ContinueFromPreviousMatchEnd => (),
         Concat(children) | Alt(children) => children.iter_mut().for_each(recur),
-        Group(child) | LookAround(child, _) | Repeat { child, .. } | AtomicGroup(child) => recur(child.as_mut()),
+        Group(child) | LookAround(child, _) | Repeat { child, .. } | AtomicGroup(child) => {
+            recur(child.as_mut())
+        }
         r @ Backref(_) => {
             let x = match r {
                 Backref(x) => *x,
@@ -243,12 +254,20 @@ pub(crate) fn substitute_backrefs_in_regex<F>(expr: &mut fancy_regex::Expr, subs
             }
         }
         BackrefExistsCondition(_) => unreachable!(),
-        r @ Conditional {..} => {
+        r @ Conditional { .. } => {
             let branches = match r {
-                Conditional { condition, true_branch, false_branch } if matches!(condition.as_ref(), BackrefExistsCondition(_)) => Some(( match condition.as_ref() {
-                    BackrefExistsCondition(x) => *x,
-                    _ => unreachable!(),
-                }, mem::replace(true_branch.as_mut(), Empty), mem::replace(false_branch.as_mut(), Empty))),
+                Conditional {
+                    condition,
+                    true_branch,
+                    false_branch,
+                } if matches!(condition.as_ref(), BackrefExistsCondition(_)) => Some((
+                    match condition.as_ref() {
+                        BackrefExistsCondition(x) => *x,
+                        _ => unreachable!(),
+                    },
+                    mem::replace(true_branch.as_mut(), Empty),
+                    mem::replace(false_branch.as_mut(), Empty),
+                )),
                 Conditional { .. } => None,
                 _ => unreachable!(),
             };
@@ -268,16 +287,15 @@ pub(crate) fn substitute_backrefs_in_regex<F>(expr: &mut fancy_regex::Expr, subs
                         recur(condition.as_mut());
                         recur(true_branch.as_mut());
                         recur(false_branch.as_mut());
-                    },
+                    }
                     _ => unreachable!(),
                 }
             }
-        },
+        }
     }
 }
 
 impl MatchPattern {
-
     pub fn new(
         has_captures: bool,
         regex_str: &str,
@@ -311,10 +329,12 @@ impl MatchPattern {
     }
 }
 
-
 /// Serialize the provided map in natural key order, so that it's deterministic when dumping.
 pub(crate) fn ordered_map<K, V, S>(map: &HashMap<K, V>, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer, K: Eq + Hash + Ord + Serialize, V: Serialize
+where
+    S: Serializer,
+    K: Eq + Hash + Ord + Serialize,
+    V: Serialize,
 {
     let ordered: BTreeMap<_, _> = map.iter().collect();
     ordered.serialize(serializer)

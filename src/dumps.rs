@@ -12,21 +12,21 @@
 //! [`dump_to_uncompressed_file`]: fn.dump_to_uncompressed_file.html
 //! [`ThemeSet`]: ../highlighting/struct.ThemeSet.html
 //! [`dump_to_file`]: fn.dump_to_file.html
+#[cfg(all(feature = "default-themes"))]
+use crate::highlighting::ThemeSet;
+#[cfg(all(feature = "default-syntaxes"))]
+use crate::parsing::SyntaxSet;
 use bincode::Result;
+#[cfg(feature = "dump-load")]
+use serde::de::DeserializeOwned;
+#[cfg(feature = "dump-create")]
+use serde::Serialize;
 use std::fs::File;
 #[cfg(feature = "dump-load")]
 use std::io::BufRead;
 #[cfg(feature = "dump-create")]
 use std::io::{BufWriter, Write};
-#[cfg(all(feature = "default-syntaxes"))]
-use crate::parsing::SyntaxSet;
-#[cfg(all(feature = "default-themes"))]
-use crate::highlighting::ThemeSet;
 use std::path::Path;
-#[cfg(feature = "dump-create")]
-use serde::Serialize;
-#[cfg(feature = "dump-load")]
-use serde::de::DeserializeOwned;
 
 /// Dumps an object to a binary array, uncompressed
 #[cfg(feature = "dump-create")]
@@ -38,7 +38,7 @@ pub fn dump_to_uncompressed_binary<T: Serialize>(o: &T) -> Vec<u8> {
 
 /// Loads an object from a binary array, uncompressed
 #[cfg(feature = "dump-load")]
-pub fn from_uncompressed_binary<T: DeserializeOwned>(v: &[u8])  -> T {
+pub fn from_uncompressed_binary<T: DeserializeOwned>(v: &[u8]) -> T {
     from_uncompressed_data(v).unwrap()
 }
 
@@ -104,10 +104,11 @@ impl SyntaxSet {
     /// [`load_defaults_newlines`]: #method.load_defaults_nonewlines
     /// [`SyntaxSetBuilder::add_from_folder`]: struct.SyntaxSetBuilder.html#method.add_from_folder
     pub fn load_defaults_nonewlines() -> SyntaxSet {
-
         #[cfg(feature = "metadata")]
         {
-            let mut ps: SyntaxSet = from_uncompressed_data(include_bytes!("../assets/default_nonewlines.packdump")).unwrap();
+            let mut ps: SyntaxSet =
+                from_uncompressed_data(include_bytes!("../assets/default_nonewlines.packdump"))
+                    .unwrap();
             let metadata = from_binary(include_bytes!("../assets/default_metadata.packdump"));
             ps.metadata = metadata;
             ps
@@ -125,10 +126,11 @@ impl SyntaxSet {
     ///
     /// [`load_defaults_nonewlines`]: #method.load_defaults_nonewlines
     pub fn load_defaults_newlines() -> SyntaxSet {
-
         #[cfg(feature = "metadata")]
         {
-            let mut ps: SyntaxSet = from_uncompressed_data(include_bytes!("../assets/default_newlines.packdump")).unwrap();
+            let mut ps: SyntaxSet =
+                from_uncompressed_data(include_bytes!("../assets/default_newlines.packdump"))
+                    .unwrap();
             let metadata = from_binary(include_bytes!("../assets/default_metadata.packdump"));
             ps.metadata = metadata;
             ps
@@ -155,7 +157,12 @@ impl ThemeSet {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(all(feature = "yaml-load", feature = "dump-create", feature = "dump-load", feature = "parsing"))]
+    #[cfg(all(
+        feature = "yaml-load",
+        feature = "dump-create",
+        feature = "dump-load",
+        feature = "parsing"
+    ))]
     #[test]
     fn can_dump_and_load() {
         use super::*;
@@ -177,12 +184,16 @@ mod tests {
         use crate::parsing::SyntaxSetBuilder;
 
         let mut builder1 = SyntaxSetBuilder::new();
-        builder1.add_from_folder("testdata/Packages", false).unwrap();
+        builder1
+            .add_from_folder("testdata/Packages", false)
+            .unwrap();
         let ss1 = builder1.build();
         let bin1 = dump_to_uncompressed_binary(&ss1);
 
         let mut builder2 = SyntaxSetBuilder::new();
-        builder2.add_from_folder("testdata/Packages", false).unwrap();
+        builder2
+            .add_from_folder("testdata/Packages", false)
+            .unwrap();
         let ss2 = builder2.build();
         let bin2 = dump_to_uncompressed_binary(&ss2);
         // This is redundant, but assert_eq! can be really slow on a large
