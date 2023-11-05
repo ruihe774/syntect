@@ -7,7 +7,6 @@
 use super::regex::{Regex, Region};
 use super::{scope::*, ParsingError};
 use crate::parsing::syntax_set::SyntaxSet;
-use regex_syntax::escape;
 use serde::{Deserialize, Serialize, Serializer};
 use smallvec::{smallvec, SmallVec};
 use std::collections::{BTreeMap, HashMap};
@@ -220,9 +219,9 @@ impl ContextReference {
     }
 }
 
-pub(crate) fn substitute_backrefs_in_regex<F>(expr: &mut fancy_regex::Expr, substituter: &F)
+pub(crate) fn substitute_backrefs_in_regex<'a, F>(expr: &mut fancy_regex::Expr, substituter: &F)
 where
-    F: Fn(usize) -> Option<String>,
+    F: Fn(usize) -> Option<&'a str>,
 {
     use fancy_regex::Expr::*;
 
@@ -231,10 +230,7 @@ where
     match expr {
         Empty
         | Any { .. }
-        | StartText
-        | EndText
-        | StartLine
-        | EndLine
+        | Assertion(_)
         | Literal { .. }
         | Delegate { .. }
         | KeepOut
@@ -249,8 +245,8 @@ where
                 _ => unreachable!(),
             };
             *r = Literal {
-                val: substituter(x).unwrap_or_default(),
-                casei: false, // FIXME
+                val: substituter(x).unwrap_or_default().into(),
+                casei: false,
             }
         }
         BackrefExistsCondition(_) => unreachable!(),
@@ -319,7 +315,7 @@ impl MatchPattern {
     pub fn regex_with_refs(&self, region: &Region, text: &str) -> Regex {
         let mut expr_tree = self.regex.get_expr_tree();
         substitute_backrefs_in_regex(&mut expr_tree.expr, &|i| {
-            region.pos(i).map(|(start, end)| escape(&text[start..end]))
+            region.pos(i).map(|(start, end)| &text[start..end])
         });
         Regex::from_expr_tree(expr_tree)
     }
